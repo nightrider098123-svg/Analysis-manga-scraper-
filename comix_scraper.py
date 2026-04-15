@@ -2,6 +2,7 @@ import argparse
 import csv
 import logging
 import os
+import sys
 import re
 import asyncio
 import aiohttp
@@ -13,15 +14,31 @@ from PIL import Image
 import nest_asyncio
 nest_asyncio.apply()
 
-# Setup logging
+# --- Google Colab Drive Setup ---
+# Check if running in Google Colab
+IN_COLAB = 'google.colab' in sys.modules
+BASE_DRIVE_DIR = "./ComixScraper"
+
+if IN_COLAB:
+    from google.colab import drive
+    # Mount Google Drive (this will prompt the user for authorization)
+    drive.mount('/content/drive', force_remount=False)
+    BASE_DRIVE_DIR = "/content/drive/MyDrive/ComixScraper"
+
+# Ensure the base directory exists
+os.makedirs(BASE_DRIVE_DIR, exist_ok=True)
+
+CSV_FILE = os.path.join(BASE_DRIVE_DIR, "manga_log.csv")
+ERROR_LOG_FILE = os.path.join(BASE_DRIVE_DIR, "error.log")
+DOWNLOADS_DIR = os.path.join(BASE_DRIVE_DIR, "Downloads")
+os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+# Setup logging directly to Google Drive
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 error_logger = logging.getLogger('error_logger')
-error_handler = logging.FileHandler('error.log')
+error_handler = logging.FileHandler(ERROR_LOG_FILE)
 error_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
 error_logger.addHandler(error_handler)
-
-CSV_FILE = "manga_log.csv"
-BASE_DIR = "Downloads"
 
 def init_csv():
     if not os.path.exists(CSV_FILE):
@@ -39,6 +56,7 @@ def load_downloaded_mangas():
     return downloaded
 
 def log_manga(manga_data):
+    # Appending directly to Google Drive so it updates in real time
     with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -62,6 +80,7 @@ async def download_image(session, url, delay=0, retries=3):
         try:
             async with session.get(url, headers=headers, timeout=10) as response:
                 if response.status == 200:
+                    # Keeps the image completely in memory (BytesIO) - no local disk writes
                     return await response.read()
         except Exception as e:
             if attempt == retries - 1:
@@ -71,6 +90,7 @@ async def download_image(session, url, delay=0, retries=3):
 
 def create_pdf(images_data, pdf_path):
     valid_images = []
+    # Process images entirely in memory
     for data in images_data:
         try:
             img = Image.open(BytesIO(data))
@@ -85,6 +105,7 @@ def create_pdf(images_data, pdf_path):
 
     if valid_images:
         try:
+            # Write the PDF directly to Google Drive in one go
             with open(pdf_path, "wb") as f:
                 f.write(img2pdf.convert(valid_images))
             return True
@@ -107,7 +128,7 @@ async def scrape_manga_chapter(page, browser_context, manga_data, chapter, args)
     if not genre:
         genre = "Uncategorized"
 
-    manga_dir = os.path.join(BASE_DIR, genre, manga_title)
+    manga_dir = os.path.join(DOWNLOADS_DIR, genre, manga_title)
     os.makedirs(manga_dir, exist_ok=True)
 
     pdf_filename = f"{ch_number}.{manga_title}.pdf"
@@ -291,13 +312,10 @@ def main():
     parser.add_argument("--limit-manga", type=int, default=0, help="Limit number of manga to process (0 = all)")
     parser.add_argument("--limit-chapters", type=int, default=0, help="Limit number of chapters to process per manga (0 = all)")
 
-    # In Jupyter/Colab, sys.argv might contain stuff we don't want.
-    # So we parse known args or provide defaults if ran without explicit args.
-    import sys
-    if 'ipykernel' in sys.modules:
+    if IN_COLAB:
         args, _ = parser.parse_known_args()
-        # Set some sane test limits if running interactively in Colab without CLI flags
         if not any(arg.startswith('--') for arg in sys.argv):
+            # Safe defaults for Colab Notebook if run without args
             args.limit_manga = 1
             args.limit_chapters = 2
     else:

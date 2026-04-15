@@ -1,13 +1,14 @@
-# Comix.to Scraper (Google Colab Edition)
+# Comix.to Scraper (Google Colab & Google Drive Edition)
 
-This is an asynchronous Python scraper to seamlessly download manga from `comix.to` directly from a Google Colab notebook environment. It uses `playwright` to natively handle the site's Cloudflare protection and `aiohttp` to concurrently download raw manga image panels. Finally, it uses `img2pdf` to output continuous-scroll PDFs with zero visible gaps between images.
+This is an asynchronous Python scraper to seamlessly download manga from `comix.to` directly from a Google Colab notebook environment. **It is specifically designed to store all data directly into your Google Drive, bypassing Colab's unreliable local disk storage entirely.**
 
 ## Features
 
-- **Google Colab Native:** Designed with `nest_asyncio` and `async_playwright` so it runs perfectly in Jupyter Notebook/Colab cells.
+- **Direct Google Drive Storage:** The script detects if it is running in Google Colab. If it is, it mounts your Google Drive and saves *everything* (PDFs, logs, and CSV) directly to `/content/drive/MyDrive/ComixScraper/`.
+- **Zero Local Disk Footprint:** Raw WebP image downloads are buffered entirely in-memory using `BytesIO`. The images are merged and saved directly as a PDF to Google Drive without ever writing intermediate files to Colab's disk.
 - **Robust Scraping:** Bypasses API blocks using headless Chromium, allowing secure interception of JSON chapter data.
-- **Smart Tracking:** Maintains a real-time append-only `manga_log.csv` file. It records manga metadata (ID, titles, author, genre, release date) and ensures that you *never* download the same manga twice across different runs.
-- **Continuous PDFs:** Packages downloaded `.webp` and `.jpg` image panels into a single PDF perfectly tailored for smooth vertical reading (webtoons/manhwa).
+- **Smart Tracking:** Maintains a real-time append-only `manga_log.csv` file directly on your Drive. It records manga metadata (ID, titles, author, genre, release date) and ensures that you *never* download the same manga twice across different runs.
+- **Continuous PDFs:** Packages downloaded `.webp` and `.jpg` image panels into a single PDF perfectly tailored for smooth vertical reading (webtoons/manhwa) using `img2pdf` with zero margins.
 - **Organized Storage:** Automatically organizes downloads into directories based on the manga's primary genre (`Downloads/<Genre>/<Manga_Title>/{Chapter}.{Title}.pdf`).
 
 ## Usage in Google Colab
@@ -26,13 +27,13 @@ Create the first cell in your Colab notebook and run the following command to in
 ### Step 2: Upload and Run the Script
 Create a second cell, upload `comix_scraper.py` to your Colab `/content/` directory, and run the script.
 
-By default, without passing arguments, it is designed to scrape a small amount of data to test. You should pass CLI arguments to run it fully:
+When you run the script for the first time, a popup will appear asking you to authorize Google Colab to access your Google Drive. Click **Allow**.
 
 ```python
 !python comix_scraper.py --concurrency 5 --delay 0.1 --limit-manga 5
 ```
 
-If you want to run the python code directly inside a Jupyter Notebook cell instead of a separate `.py` file, you can simply paste the entire contents of `comix_scraper.py` into a notebook cell and execute it. The `nest_asyncio.apply()` function at the top will automatically patch the event loop for you.
+Alternatively, you can just paste the entire `comix_scraper.py` source code into a Jupyter Notebook cell and execute it directly.
 
 ### CLI Arguments
 
@@ -45,17 +46,20 @@ You can customize the script's behavior using the following optional arguments:
 
 ## Output Structure
 
-The script will automatically create a `Downloads` directory in the environment. In Google Colab, you will find this inside `/content/Downloads/`.
+The script will automatically create a `ComixScraper` directory in your Google Drive root.
 
 ```
-Downloads/
-├── Action/
-│   └── Eleceed/
-│       ├── 397.Eleceed.pdf
-│       └── 398.Eleceed.pdf
-└── Romance/
-    └── 19 Days/
-        └── 459.19 Days.pdf
+/content/drive/MyDrive/ComixScraper/
+├── manga_log.csv
+├── error.log
+└── Downloads/
+    ├── Action/
+    │   └── Eleceed/
+    │       ├── 397.Eleceed.pdf
+    │       └── 398.Eleceed.pdf
+    └── Romance/
+        └── 19 Days/
+            └── 459.19 Days.pdf
 ```
 
-You can then zip the folder and download it, or sync it directly to Google Drive.
+Because everything is saved directly to your Google Drive, you will not lose any data if the Google Colab runtime crashes or disconnects!
